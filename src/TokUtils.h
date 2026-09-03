@@ -1,6 +1,9 @@
 #ifndef TOK_UTILS_H
 #define TOK_UTILS_H
 
+#include <string_view>
+#include <unordered_map>
+
 #include "Prim.h"
 #include "Source.h"
 
@@ -10,7 +13,7 @@ class TMaker {
     static bool isSpace(char c) { return c == ' ' || c == '\t'; }
     static bool isEOL(char c) { return c == '\r' || c == '\n'; }
     static bool isSymbol(char c) {
-        return (c >= 0x30 && c <= 0x39) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) ||
+        return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) ||
                c == '_' || c == '.' || c == '$' || c == '!' || c == '%' || c == '@' || c == '?';
     }
     static bool isPunct(char c) {
@@ -18,10 +21,6 @@ class TMaker {
                c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ':' ||
                c == ',' || c == '|' || c == '&' || c == '~' || c == '#' || c == '`';
     }
-    struct Tkn {
-        TokKind kind;
-        u32 start, end;
-    };
 
     TMaker(const Source& src) : src_(src) {}
 
@@ -36,7 +35,12 @@ class TMaker {
     }
 
    private:
-    Tkn next() {
+    struct Tok {
+        TokKind kind;
+        u32 start, end;
+    };
+
+    Tok next() {
         /* skip tabs & spaces */
         while (isSpace(get())) idx_++;
 
@@ -73,7 +77,7 @@ class TMaker {
         }
     }
     const Source& src_;
-    u32 idx_ {};
+    u32 idx_{};
 };
 
 #endif

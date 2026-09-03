@@ -4,16 +4,29 @@
 #include "Source.h"
 #include "TokUtils.h"
 
-const char* Symbol = "\033[3;34mSymbol\033[0m";
-const char* Endl = "\033[1;33mEndl\033[0m";
 const char* Eof = "\033[1;32mEOF!\033[0m";
 const char* Punct = "\033[3;31mPunct\033[0m";
+const char* Endl = "\033[1;33mEndl\033[0m";
 const char* String = "\033[3;30mString\033[0m";
+const char* Symbol = "\033[3;34mSymbol\033[0m";
 
 int main(int argc, char** argv) {
     if (argc < 2) {
+        fprintf(stderr, "\n\033[1;36m[!] usage:\033[35m pqry <file>\033[0m\n");
         return 2;
     }
+
+    for (u64 i = 1; i < argc; ++i) {
+        const char* const arg = argv[i];
+        if (*arg == '-') {
+            char c = arg[1];
+            switch (c) {
+                default:
+                    break;
+            }
+        }
+    }
+
     auto src = Source::fromFile(argv[1]);
     auto toks = TokArray(src.size() + 1);
     auto tmaker = TMaker(src);
