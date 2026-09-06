@@ -1,6 +1,9 @@
 format PE64 Console 6.0
 entry start
 
+WIDTH equ 10
+HEIGHT equ 20
+
 section ".text" readable executable
 start:  push rbp
         mov rsp, rbp

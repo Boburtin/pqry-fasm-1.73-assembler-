@@ -1,5 +1,6 @@
 #include <cstdio>
 
+#include "Preproc.h"
 #include "Prim.h"
 #include "Source.h"
 #include "TokUtils.h"
@@ -14,17 +15,6 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "\n\033[1;36m[!] usage:\033[35m pqry <file>\033[0m\n");
         return 2;
-    }
-
-    for (u64 i = 1; i < argc; ++i) {
-        const char* const arg = argv[i];
-        if (*arg == '-') {
-            char c = arg[1];
-            switch (c) {
-                default:
-                    break;
-            }
-        }
     }
 
     auto src = Source::fromFile(argv[1]);

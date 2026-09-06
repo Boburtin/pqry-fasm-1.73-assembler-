@@ -121,7 +121,8 @@ struct ParamStore {
     u32* nameOff{};
     u32* nameLen{};
     ParamMode* mode{};
-    u32* deflt{};
+    u32* defltBeg{};   // [defltBeg,defltEnd) window into MacroTable::body; U32_MAX = no default
+    u32* defltEnd{};
 
     ParamStore() = default;
     explicit ParamStore(u32 n) { reserve(n); }
@@ -131,13 +132,15 @@ struct ParamStore {
         std::free(nameOff);
         std::free(nameLen);
         std::free(mode);
-        std::free(deflt);
+        std::free(defltBeg);
+        std::free(defltEnd);
     }
     void reserve(u32 n) {
         nameOff = static_cast<u32*>(std::malloc(n * sizeof(u32)));
         nameLen = static_cast<u32*>(std::malloc(n * sizeof(u32)));
         mode = static_cast<ParamMode*>(std::malloc(n * sizeof(ParamMode)));
-        deflt = static_cast<u32*>(std::malloc(n * sizeof(u32)));
+        defltBeg = static_cast<u32*>(std::malloc(n * sizeof(u32)));
+        defltEnd = static_cast<u32*>(std::malloc(n * sizeof(u32)));
         cap = n;
     }
 
@@ -146,15 +149,17 @@ struct ParamStore {
         nameOff = static_cast<u32*>(std::realloc(nameOff, n * sizeof(u32)));
         nameLen = static_cast<u32*>(std::realloc(nameLen, n * sizeof(u32)));
         mode = static_cast<ParamMode*>(std::realloc(mode, n * sizeof(ParamMode)));
-        deflt = static_cast<u32*>(std::realloc(deflt, n * sizeof(u32)));
+        defltBeg = static_cast<u32*>(std::realloc(defltBeg, n * sizeof(u32)));
+        defltEnd = static_cast<u32*>(std::realloc(defltEnd, n * sizeof(u32)));
         cap = n;
     }
-    u32 push(u32 nOff, u32 nLen, ParamMode m, u32 hndl = U32_MAX) {
+    u32 push(u32 nOff, u32 nLen, ParamMode m, u32 dBeg = U32_MAX, u32 dEnd = U32_MAX) {
         if (size == cap) grow();
         nameOff[size] = nOff;
         nameLen[size] = nLen;
         mode[size] = m;
-        deflt[size] = hndl;
+        defltBeg[size] = dBeg;
+        defltEnd[size] = dEnd;
         return size++;
     }
 };
@@ -224,8 +229,8 @@ struct OriginArray {
     }
 
     void reserve(u32 n) {
-        srcTok = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        depth = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
+        srcTok = static_cast<u32*>(std::malloc(n * sizeof(u32)));
+        depth = static_cast<u32*>(std::malloc(n * sizeof(u32)));
         cap = n;
     }
 
@@ -251,6 +256,7 @@ struct TextArena {
         bytes.append(p, n);
         return off;
     }
+    const char *data() const { return bytes.data(); }
 };
 
 #endif
