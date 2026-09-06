@@ -4,6 +4,13 @@ entry start
 WIDTH equ 10
 HEIGHT equ 20
 
+macro test a, b {
+        push rbp
+        mov rbp, a
+        mov rsp, b
+        pop rbp
+}
+
 section ".text" readable executable
 start:  push rbp
         mov rsp, rbp

@@ -3,15 +3,17 @@
 
 #include "IntegralAliases.h"
 
+#include <cstring>
 #include <string>
 
 constexpr u32 U32_MAX = 0xFFFFFFFFU;
 constexpr u32 kMaxExpand = 1U << 12;
 constexpr uSize kCacheLine = 64ULL;
 
-#if defined(_MSC_VER)
+#if defined(_WIN32)
 #include <malloc.h>
 #define ALIGNED_ALLOC(align, size) _aligned_malloc((size), (align))
+#define ALIGNED_REALLOC(p, newSz, align) _aligned_realloc((p), (newSz), (align))
 #define ALIGNED_FREE(p) _aligned_free(p)
 #else
 #include <cstdlib>
@@ -28,10 +30,10 @@ constexpr uSize kCacheLine = 64ULL;
 
 #if defined(__cpp_lib_flat_map)
 #include <flat_map>
-template <class K, class V> using FlatMap = std::flat_map<K, V>;
+template <class K, class V> using T_Map = std::flat_map<K, V>;
 #else
 #include <unordered_map>
-template <class K, class V> using FlatMap = std::unordered_map<K, V>;
+template <class K, class V> using T_Map = std::unordered_map<K, V>;
 #endif
 
 #if __has_cpp_attribute(assume)
@@ -49,38 +51,36 @@ template <class T> inline T *alloc_array(void *p, u32 n)
 #endif
 }
 
-enum class TokKind : u8
+inline void *aligned_grow(void *old_p, uSize oldBytes, uSize newBytes, uSize align)
 {
-    String,
-    Symbol,
-    Punct,
-    Endl,
-    Eof,
-};
-enum class DefKind : u8
+#if defined(_WIN32)
+    return ALIGNED_REALLOC(old_p, newBytes, align);
+#else
+    void *p = ALIGNED_ALLOC(align, newBytes);
+    if (old_p)
+    {
+        std::memcpy(p, old_p, oldBytes < newBytes ? oldBytes : newBytes);
+        ALIGNED_FREE(old_p);
+    }
+    return p;
+#endif
+}
+
+inline uSize aligned_size(uSize n)
 {
-    Equ,
-    Define,
-    Fix
-};
-enum class MacroKind : u8
-{
-    Macro,
-    Struc
-};
-enum class ParamMode : u8
-{
-    Plain,
-    Greedy,
-    Group
-};
+    return (n + kCacheLine - 1) & ~(kCacheLine - 1);
+}
+
+enum class TokKind : u8 { String, Symbol, Punct, Endl, Eof };
+enum class DefKind : u8 { Equ, Define, Fix };
+enum class MacroKind : u8 { Macro, Struc };
+enum class ParamMode : u8 { Plain, Greedy, Group };
 
 struct TokArray
 {
     u32 size{}, cap{};
     TokKind *kinds{};
-    u32 *starts{};
-    u32 *ends{};
+    u32 *starts{}, *ends{};
 
     TokArray() = default;
     explicit TokArray(u32 n)
@@ -99,28 +99,27 @@ struct TokArray
 
     void reserve(u32 n)
     {
-        kinds = static_cast<TokKind *>(malloc(n * sizeof(TokKind)));
-        starts = static_cast<u32 *>(malloc(n * sizeof(u32)));
-        ends = static_cast<u32 *>(malloc(n * sizeof(u32)));
+        kinds = alloc_array<TokKind>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(TokKind))), n);
+        starts = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        ends = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
         cap = n;
     }
 
     void grow()
     {
         u32 n = cap ? cap * 2 : 64;
-        kinds = static_cast<TokKind *>(std::realloc(kinds, n * sizeof(TokKind)));
-        starts = static_cast<u32 *>(std::realloc(starts, n * sizeof(u32)));
-        ends = static_cast<u32 *>(std::realloc(ends, n * sizeof(u32)));
+        kinds = alloc_array<TokKind>(aligned_grow(kinds, cap * sizeof(TokKind), aligned_size(n * sizeof(TokKind)), kCacheLine), n);
+        starts = alloc_array<u32>(aligned_grow(starts, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        ends = alloc_array<u32>(aligned_grow(ends, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
 
     u32 push(TokKind k, u32 s, u32 e)
     {
-        if (size == cap)
-            grow();
+        ASSUME(size <= cap);
+        if (size == cap) grow();
         kinds[size] = k;
-        starts[size] = s;
-        ends[size] = e;
+        starts[size] = s, ends[size] = e;
         return size++;
     }
 };
@@ -134,8 +133,7 @@ struct DefTable
     u32 *lock{};
     u32 *prev{};
     TokArray val;
-    std::unordered_map<std::string, u32> byName;
-    /* TODO! implement better hashmap */
+    T_Map<std::string, u32> byName;
 
     DefTable() = default;
     explicit DefTable(u32 n)
@@ -146,38 +144,37 @@ struct DefTable
     DefTable &operator=(const DefTable &) = delete;
     ~DefTable()
     {
-        std::free(kind);
-        std::free(valBeg);
-        std::free(valEnd);
-        std::free(lock);
-        std::free(prev);
+        ALIGNED_FREE(kind);
+        ALIGNED_FREE(valBeg);
+        ALIGNED_FREE(valEnd);
+        ALIGNED_FREE(lock);
+        ALIGNED_FREE(prev);
     }
     void reserve(u32 n)
     {
-        kind = static_cast<DefKind *>(std::malloc(n * sizeof(DefKind)));
-        valBeg = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        valEnd = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        lock = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        prev = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
+        kind = alloc_array<DefKind>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(DefKind))), n);
+        valBeg = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        valEnd = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        lock = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        prev = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
         cap = n;
     }
     void grow()
     {
         u32 n = cap ? cap * 2 : 32;
-        kind = static_cast<DefKind *>(std::realloc(kind, n * sizeof(DefKind)));
-        valBeg = static_cast<u32 *>(std::realloc(valBeg, n * sizeof(u32)));
-        valEnd = static_cast<u32 *>(std::realloc(valEnd, n * sizeof(u32)));
-        lock = static_cast<u32 *>(std::realloc(lock, n * sizeof(u32)));
-        prev = static_cast<u32 *>(std::realloc(prev, n * sizeof(u32)));
+        kind = alloc_array<DefKind>(aligned_grow(kind, cap * sizeof(DefKind), aligned_size(n * sizeof(DefKind)), kCacheLine), n);
+        valBeg = alloc_array<u32>(aligned_grow(valBeg, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        valEnd = alloc_array<u32>(aligned_grow(valEnd, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        lock = alloc_array<u32>(aligned_grow(lock, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        prev = alloc_array<u32>(aligned_grow(prev, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
     u32 add(DefKind k, u32 vb, u32 ve, u32 prevId = U32_MAX)
     {
-        if (size == cap)
-            grow();
+        ASSUME(size <= cap);
+        if (size == cap) grow();
         kind[size] = k;
-        valBeg[size] = vb;
-        valEnd[size] = ve;
+        valBeg[size] = vb, valEnd[size] = ve;
         lock[size] = 0;
         prev[size] = prevId;
         return size++;
@@ -202,41 +199,39 @@ struct ParamStore
     ParamStore &operator=(const ParamStore &) = delete;
     ~ParamStore()
     {
-        std::free(nameOff);
-        std::free(nameLen);
-        std::free(mode);
-        std::free(defltBeg);
-        std::free(defltEnd);
+        ALIGNED_FREE(nameOff);
+        ALIGNED_FREE(nameLen);
+        ALIGNED_FREE(mode);
+        ALIGNED_FREE(defltBeg);
+        ALIGNED_FREE(defltEnd);
     }
     void reserve(u32 n)
     {
-        nameOff = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        nameLen = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        mode = static_cast<ParamMode *>(std::malloc(n * sizeof(ParamMode)));
-        defltBeg = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        defltEnd = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
+        nameOff = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        nameLen = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        mode = alloc_array<ParamMode>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(ParamMode))), n);
+        defltBeg = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        defltEnd = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
         cap = n;
     }
 
     void grow()
     {
         u32 n = cap ? cap * 2 : 32;
-        nameOff = static_cast<u32 *>(std::realloc(nameOff, n * sizeof(u32)));
-        nameLen = static_cast<u32 *>(std::realloc(nameLen, n * sizeof(u32)));
-        mode = static_cast<ParamMode *>(std::realloc(mode, n * sizeof(ParamMode)));
-        defltBeg = static_cast<u32 *>(std::realloc(defltBeg, n * sizeof(u32)));
-        defltEnd = static_cast<u32 *>(std::realloc(defltEnd, n * sizeof(u32)));
+        nameOff = alloc_array<u32>(aligned_grow(nameOff, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        nameLen = alloc_array<u32>(aligned_grow(nameLen, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        mode = alloc_array<ParamMode>(aligned_grow(mode, cap * sizeof(ParamMode), aligned_size(n * sizeof(ParamMode)), kCacheLine), n);
+        defltBeg = alloc_array<u32>(aligned_grow(defltBeg, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        defltEnd = alloc_array<u32>(aligned_grow(defltEnd, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
     u32 push(u32 nOff, u32 nLen, ParamMode m, u32 dBeg = U32_MAX, u32 dEnd = U32_MAX)
     {
-        if (size == cap)
-            grow();
-        nameOff[size] = nOff;
-        nameLen[size] = nLen;
+        ASSUME(size <= cap);
+        if (size == cap) grow();
+        nameOff[size] = nOff, nameLen[size] = nLen;
         mode[size] = m;
-        defltBeg[size] = dBeg;
-        defltEnd[size] = dEnd;
+        defltBeg[size] = dBeg, defltEnd[size] = dEnd;
         return size++;
     }
 };
@@ -252,7 +247,7 @@ struct MacroTable
 
     ParamStore params;
     TokArray body;
-    std::unordered_map<std::string, u32> byName;
+    T_Map<std::string, u32> byName;
 
     MacroTable() = default;
     explicit MacroTable(u32 n)
@@ -263,40 +258,38 @@ struct MacroTable
     MacroTable &operator=(const MacroTable &) = delete;
     ~MacroTable()
     {
-        std::free(kind);
-        std::free(paramBeg);
-        std::free(paramEnd);
-        std::free(bodyBeg);
-        std::free(bodyEnd);
+        ALIGNED_FREE(kind);
+        ALIGNED_FREE(paramBeg);
+        ALIGNED_FREE(paramEnd);
+        ALIGNED_FREE(bodyBeg);
+        ALIGNED_FREE(bodyEnd);
     }
     void reserve(u32 n)
     {
-        kind = static_cast<MacroKind *>(std::malloc(n * sizeof(MacroKind)));
-        paramBeg = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        paramEnd = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        bodyBeg = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        bodyEnd = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
+        kind = alloc_array<MacroKind>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(MacroKind))), n);
+        paramBeg = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        paramEnd = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        bodyBeg = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        bodyEnd = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
         cap = n;
     }
     void grow()
     {
         u32 n = cap ? cap * 2 : 16;
-        kind = static_cast<MacroKind *>(std::realloc(kind, n * sizeof(MacroKind)));
-        paramBeg = static_cast<u32 *>(std::realloc(paramBeg, n * sizeof(u32)));
-        paramEnd = static_cast<u32 *>(std::realloc(paramEnd, n * sizeof(u32)));
-        bodyBeg = static_cast<u32 *>(std::realloc(bodyBeg, n * sizeof(u32)));
-        bodyEnd = static_cast<u32 *>(std::realloc(bodyEnd, n * sizeof(u32)));
+        kind = alloc_array<MacroKind>(aligned_grow(kind, cap * sizeof(MacroKind), aligned_size(n * sizeof(MacroKind)), kCacheLine), n);
+        paramBeg = alloc_array<u32>(aligned_grow(paramBeg, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        paramEnd = alloc_array<u32>(aligned_grow(paramEnd, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        bodyBeg = alloc_array<u32>(aligned_grow(bodyBeg, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        bodyEnd = alloc_array<u32>(aligned_grow(bodyEnd, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
     u32 add(MacroKind k, u32 pb, u32 pe, u32 bb, u32 be)
     {
-        if (size == cap)
-            grow();
+        ASSUME(size <= cap);
+        if (size == cap) grow();
         kind[size] = k;
-        paramBeg[size] = pb;
-        paramEnd[size] = pe;
-        bodyBeg[size] = bb;
-        bodyEnd[size] = be;
+        paramBeg[size] = pb, paramEnd[size] = pe;
+        bodyBeg[size] = bb, bodyEnd[size] = be;
         return size++;
     }
 };
@@ -312,29 +305,29 @@ struct OriginArray
     OriginArray &operator=(const OriginArray &) = delete;
     ~OriginArray()
     {
-        std::free(srcTok);
-        std::free(depth);
+        ALIGNED_FREE(srcTok);
+        ALIGNED_FREE(depth);
     }
 
     void reserve(u32 n)
     {
-        srcTok = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
-        depth = static_cast<u32 *>(std::malloc(n * sizeof(u32)));
+        srcTok = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        depth = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
         cap = n;
     }
 
     void grow()
     {
         u32 n = cap ? cap * 2 : 256;
-        srcTok = static_cast<u32 *>(std::realloc(srcTok, n * sizeof(u32)));
-        depth = static_cast<u32 *>(std::realloc(depth, n * sizeof(u32)));
+        srcTok = alloc_array<u32>(aligned_grow(srcTok, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        depth = alloc_array<u32>(aligned_grow(depth, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
 
     void push(u32 s, u32 d)
     {
-        if (size == cap)
-            grow();
+        ASSUME(size <= cap);
+        if (size == cap) grow();
         srcTok[size] = s;
         depth[size] = d;
         size++;

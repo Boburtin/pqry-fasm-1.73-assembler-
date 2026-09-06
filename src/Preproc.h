@@ -32,11 +32,9 @@ struct Preproc
 
     static bool ieq(std::string_view a, std::string_view b)
     {
-        if (a.size() != b.size())
-            return false;
+        if (a.size() != b.size()) return false;
         for (auto j = b.size(); j-- > 0;)
-            if ((a[j] | 0x20) != b[j])
-                return false;
+            if ((a[j] | 0x20) != b[j]) return false;
         return true;
     }
 
@@ -51,6 +49,11 @@ struct Preproc
     std::string_view view(u32 j) const
     {
         return {src.data() + in.starts[j], in.ends[j] - in.starts[j]};
+    }
+
+    u32 skipEndl(u32 e) const
+    {
+        return (e < in.size && in.kinds[e] == TokKind::Endl) ? e + 1 : e;
     }
 
     void emitRaw(u32 j)
@@ -102,13 +105,11 @@ struct Preproc
         for (;;)
         {
             TokKind k = in.kinds[j];
-            if (k == TokKind::Eof)
-                return j;
+            if (k == TokKind::Eof) return j;
             if (k == TokKind::Endl)
             {
                 bool cont = j > b && in.kinds[j - 1] == TokKind::Symbol && view(j - 1) == "\\";
-                if (!cont)
-                    return j;
+                if (!cont) return j;
             }
             j++;
         }
@@ -136,31 +137,26 @@ struct Preproc
         u32 ve = defs.val.size;
 
         u32 prevId = U32_MAX;
-        if (auto it = defs.byName.find(name); it != defs.byName.end())
-            prevId = it->second;
+        if (auto it = defs.byName.find(name); it != defs.byName.end()) prevId = it->second;
 
         defs.byName[name] = defs.add(DefKind::Equ, vb, ve, prevId);
 
-        i = e;
+        i = skipEndl(e);
     }
 
     void doRestore(u32 b, u32 e)
     {
         for (u32 j = b; j < e; ++j)
         {
-            if (in.kinds[j] == TokKind::Punct && view(j) == ",")
-                continue;
+            if (in.kinds[j] == TokKind::Punct && view(j) == ",") continue;
             std::string name = fold(view(j));
             auto it = defs.byName.find(name);
-            if (it == defs.byName.end())
-                continue;
+            if (it == defs.byName.end()) continue;
             u32 id = it->second;
-            if (defs.prev[id] != U32_MAX)
-                defs.byName[name] = defs.prev[id];
-            else
-                defs.byName.erase(it);
+            if (defs.prev[id] != U32_MAX) defs.byName[name] = defs.prev[id];
+            else defs.byName.erase(it);
         }
-        i = e;
+        i = skipEndl(e);
     }
 
     void captureMacro(u32 b)
@@ -178,14 +174,11 @@ struct Preproc
                 i = j;
                 return;
             }
-            if (ckind == TokKind::Endl)
-                continue;
+            if (ckind == TokKind::Endl) continue;
             if (ckind == TokKind::Punct)
             {
-                if (cview == "{")
-                    break;
-                if (cview == ",")
-                    continue;
+                if (cview == "{") break;
+                if (cview == ",") continue;
             }
             ParamMode cmode = ParamMode::Plain;
             if (!cview.empty() && cview.back() == '*')
@@ -224,12 +217,10 @@ struct Preproc
         {
             auto ckind = in.kinds[j];
             auto cview = view(j);
-            if (j >= in.size || ckind == TokKind::Eof)
-                break;
+            if (j >= in.size || ckind == TokKind::Eof) break;
             if (ckind == TokKind::Punct)
             {
-                if (cview == "{")
-                    ++braceDepth;
+                if (cview == "{") ++braceDepth;
                 else if (cview == "}" && --braceDepth == 0)
                 {
                     ++j;
@@ -241,7 +232,7 @@ struct Preproc
         }
         u32 be = macros.body.size;
         macros.byName[name] = macros.add(MacroKind::Macro, pb, pe, bb, be);
-        i = j;
+        i = skipEndl(j);
     }
 
     void expandMacro(u32 id, u32 b, u32 e)
@@ -271,8 +262,7 @@ struct Preproc
                     ++j;
             }
             arg[p] = {ab, j};
-            if (j < e && in.kinds[j] == TokKind::Punct && view(j) == ",")
-                ++j;
+            if (j < e && in.kinds[j] == TokKind::Punct && view(j) == ",") ++j;
             ++p;
         }
 
@@ -305,8 +295,7 @@ struct Preproc
                         u32 dBeg{macros.params.defltBeg[pb + matched]}, dEnd{macros.params.defltEnd[pb + matched]};
                         for (u32 n{dBeg}; n != U32_MAX && n < dEnd; ++n)
                         {
-                            emitStored(macros.body.kinds[n], macros.body.starts[n],
-                                       macros.body.ends[n] - macros.body.starts[n]);
+                            emitStored(macros.body.kinds[n], macros.body.starts[n], macros.body.ends[n] - macros.body.starts[n]);
                         }
                     }
                     continue;
@@ -315,7 +304,7 @@ struct Preproc
             emitStored(macros.body.kinds[n], macros.body.starts[n], macros.body.ends[n] - macros.body.starts[n]);
         }
         --depth;
-        i = e;
+        i = skipEndl(e);
     }
 
     bool dispatchDirective(u32 b, u32 e)
@@ -331,8 +320,7 @@ struct Preproc
             return true;
         }
         if (b + 1 < e && in.kinds[b] == TokKind::Symbol &&
-            ((in.kinds[b + 1] == TokKind::Symbol && ieq(view(b + 1), "equ")) ||
-             (in.kinds[b + 1] == TokKind::Punct && view(b + 1) == "=")))
+            ((in.kinds[b + 1] == TokKind::Symbol && ieq(view(b + 1), "equ")) || (in.kinds[b + 1] == TokKind::Punct && view(b + 1) == "=")))
         {
             defineEqu(fold(view(b)), b + 2, e);
             return true;
@@ -357,8 +345,7 @@ struct Preproc
                 continue;
             }
             u32 b = i, e = lineEnd(i);
-            if (dispatchDirective(b, e))
-                continue;
+            if (dispatchDirective(b, e)) continue;
             for (u32 j = b; j < e; ++j)
             {
                 if (in.kinds[j] == TokKind::Symbol && view(j) == "\\" && j + 1 < e && in.kinds[j + 1] == TokKind::Endl)

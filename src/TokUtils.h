@@ -24,14 +24,13 @@ class TMaker
     }
     static bool isSymbol(char c)
     {
-        return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == '_' ||
-               c == '.' || c == '$' || c == '!' || c == '%' || c == '@' || c == '?';
+        return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == '_' || c == '.' || c == '$' ||
+               c == '!' || c == '%' || c == '@' || c == '?';
     }
     static bool isPunct(char c)
     {
-        return c == '+' || c == '-' || c == '/' || c == '*' || c == '=' || c == '<' || c == '>' || c == '(' ||
-               c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ':' || c == ',' || c == '|' ||
-               c == '&' || c == '~' || c == '#' || c == '`';
+        return c == '+' || c == '-' || c == '/' || c == '*' || c == '=' || c == '<' || c == '>' || c == '(' || c == ')' || c == '[' ||
+               c == ']' || c == '{' || c == '}' || c == ':' || c == ',' || c == '|' || c == '&' || c == '~' || c == '#' || c == '`';
     }
 
     TMaker(const Source &src) : src_(src)
@@ -49,8 +48,7 @@ class TMaker
         {
             auto [k, s, e] = next();
             out.push(k, s, e);
-            if (k == TokKind::Eof)
-                break;
+            if (k == TokKind::Eof) break;
         }
     }
 
@@ -93,9 +91,8 @@ class TMaker
             return {TokKind::Endl, start, idx_};
         }
         default:
-            if (isPunct(c))
-                return {TokKind::Punct, start, ++idx_};
-            while (!isEOF(c) && !isSpace(c) && !isEOL(c))
+            if (isPunct(c)) return {TokKind::Punct, start, ++idx_};
+            while (!isEOF(c) && !isSpace(c) && !isEOL(c) && !isPunct(c))
             {
                 idx_++;
                 c = get();
