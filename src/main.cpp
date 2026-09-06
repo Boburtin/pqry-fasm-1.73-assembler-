@@ -5,16 +5,27 @@
 #include "Source.h"
 #include "TokUtils.h"
 
-const char* Eof = "\033[1;32mEOF!\033[0m";
-const char* Punct = "\033[3;31mPunct\033[0m";
-const char* Endl = "\033[1;33mEndl\033[0m";
-const char* String = "\033[3;30mString\033[0m";
-const char* Symbol = "\033[3;34mSymbol\033[0m";
+#define EXIT_USAGE 2
 
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        fprintf(stderr, "\n\033[1;36m[!] usage:\033[35m pqry <file>\033[0m\n");
-        return 2;
+const char *BOLD = "\n\033[1m[%05llu]\033[0m %s";
+
+const char *chSuccess = "[+]";
+const char *chFailure = "[-]";
+const char *chWarning = "[!]";
+const char *chUpdate = "[*]";
+
+const char *Eof = "\033[1;32mEOF!\033[0m";
+const char *Punct = "\033[3;31mPunct\033[0m";
+const char *Endl = "\033[1;33mEndl\033[0m";
+const char *String = "\033[3;30mString\033[0m";
+const char *Symbol = "\033[3;34mSymbol\033[0m";
+
+int main(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        fprintf(stderr, "\n\033[1;36m%s usage:\033[35m pqry <file>\033[0m\n", chFailure);
+        return EXIT_USAGE;
     }
 
     auto src = Source::fromFile(argv[1]);
@@ -22,23 +33,25 @@ int main(int argc, char** argv) {
     auto tmaker = TMaker(src);
     tmaker.scan(toks);
 
-    for (u64 i{}; i < toks.size; ++i) {
-        switch (toks.kinds[i]) {
-            case TokKind::Symbol:
-                printf("\n[%llu] = %s", i, Symbol);
-                break;
-            case TokKind::Endl:
-                printf(", [%llu] %s", i, Endl);
-                break;
-            case TokKind::Eof:
-                printf("\n[%llu] = %s", i, Eof);
-                break;
-            case TokKind::Punct:
-                printf("\n[%llu] = %s", i, Punct);
-                break;
-            case TokKind::String:
-                printf("\n[%llu] = %s", i, String);
-                break;
+    for (u64 i{}; i < toks.size; ++i)
+    {
+        switch (toks.kinds[i])
+        {
+        case TokKind::Symbol:
+            printf(BOLD, i, Symbol);
+            break;
+        case TokKind::Endl:
+            printf(", %s", Endl);
+            break;
+        case TokKind::Eof:
+            printf(BOLD, i, Eof);
+            break;
+        case TokKind::Punct:
+            printf(BOLD, i, Punct);
+            break;
+        case TokKind::String:
+            printf(BOLD, i, String);
+            break;
         }
     }
     return 0;

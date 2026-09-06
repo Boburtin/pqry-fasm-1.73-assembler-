@@ -3,3 +3,4 @@ build/
 .clang-format
 test/
 dbg/
+compile_commands.json
