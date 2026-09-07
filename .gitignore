@@ -14,4 +14,4 @@ out/
 
 # test argv input files
 
-*.asm
+test.asm
