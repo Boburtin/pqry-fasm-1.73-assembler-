@@ -1,0 +1,7 @@
+# C++ Port of the ['flat assembler'](https://flatassembler.net/docs.php) v1.73
+
+- Attempted port of the awesome flat assembler which is a self-hosted assembler.
+The creator is insanely talented, and I hope to replicate only a fraction of the performance and capability it has.
+
+## WIP!
+
