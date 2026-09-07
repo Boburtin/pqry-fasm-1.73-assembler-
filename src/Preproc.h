@@ -8,8 +8,7 @@
 #include "Prim.h"
 #include "Source.h"
 
-struct Preproc
-{
+struct Preproc {
     const Source &src;
     const TokArray &in;
     TextArena arena;
@@ -23,71 +22,56 @@ struct Preproc
     u32 depth{};
     u32 i{};
 
-    Preproc(const Source &s, const TokArray &t) : src(s), in(t)
-    {
+    Preproc(const Source &s, const TokArray &t) : src(s), in(t) {
         out.reserve(t.size);
         origin.reserve(t.size);
         arena.bytes.reserve(s.size());
     }
 
-    static bool ieq(std::string_view a, std::string_view b)
-    {
+    static bool ieq(std::string_view a, std::string_view b) {
         if (a.size() != b.size()) return false;
         for (auto j = b.size(); j-- > 0;)
             if ((a[j] | 0x20) != b[j]) return false;
         return true;
     }
 
-    static std::string fold(std::string_view s)
-    {
+    static std::string fold(std::string_view s) {
         std::string r(s);
         for (char &c : r)
             c |= 0x20;
         return r;
     }
 
-    std::string_view view(u32 j) const
-    {
-        return {src.data() + in.start[j], in.end[j] - in.start[j]};
-    }
+    std::string_view view(u32 j) const { return {src.data() + in.start[j], in.end[j] - in.start[j]}; }
 
-    u32 skipEndl(u32 e) const
-    {
-        return (e < in.size && in.kind[e] == TokKind::Endl) ? e + 1 : e;
-    }
+    u32 skipEndl(u32 e) const { return (e < in.size && in.kind[e] == TokKind::Endl) ? e + 1 : e; }
 
-    void emitRaw(u32 j)
-    {
+    void emitRaw(u32 j) {
         auto t = view(j);
         u32 off = arena.put(t.data(), (u32)t.size());
         out.push(in.kind[j], off, off + (u32)t.size());
         origin.push(j, depth);
     }
 
-    void emitText(TokKind k, std::string_view t)
-    {
+    void emitText(TokKind k, std::string_view t) {
         u32 off = arena.put(t.data(), (u32)t.size());
         out.push(k, off, off + (u32)t.size());
         origin.push(U32_MAX, depth);
     }
 
-    void emitStored(TokKind k, u32 off, u32 len)
-    {
+    void emitStored(TokKind k, u32 off, u32 len) {
         out.push(k, off, off + len);
         origin.push(U32_MAX, depth);
     }
 
-    void emitExpanded(u32 j)
-    {
-        if (in.kind[j] != TokKind::Symbol)
-        {
+    void emitExpanded(u32 j) {
+        if (in.kind[j] != TokKind::Symbol) {
             emitRaw(j);
             return;
         }
 
         auto it = defs.byName.find(fold(view(j)));
-        if (it == defs.byName.end() || defs.lock[it->second])
-        {
+        if (it == defs.byName.end() || defs.lock[it->second]) {
             emitRaw(j);
             return;
         }
@@ -99,15 +83,12 @@ struct Preproc
         defs.lock[id]--;
     }
 
-    u32 lineEnd(u32 b) const
-    {
+    u32 lineEnd(u32 b) const {
         u32 j = b;
-        for (;;)
-        {
+        for (;;) {
             TokKind k = in.kind[j];
             if (k == TokKind::Eof) return j;
-            if (k == TokKind::Endl)
-            {
+            if (k == TokKind::Endl) {
                 bool cont = j > b && in.kind[j - 1] == TokKind::Symbol && view(j - 1) == "\\";
                 if (!cont) return j;
             }
@@ -115,20 +96,15 @@ struct Preproc
         }
     }
 
-    void defineEqu(const std::string &name, u32 b, u32 e)
-    {
+    void defineEqu(const std::string &name, u32 b, u32 e) {
         u32 vb = defs.val.size;
-        for (u32 j = b; j < e; ++j)
-        {
+        for (u32 j = b; j < e; ++j) {
             auto it = defs.byName.find(fold(view(j)));
-            if (it != defs.byName.end() && defs.lock[it->second] == 0)
-            {
+            if (it != defs.byName.end() && defs.lock[it->second] == 0) {
                 u32 s = it->second;
                 for (u32 n = defs.valBeg[s]; n < defs.valEnd[s]; ++n)
                     defs.val.push(defs.val.kind[n], defs.val.start[n], defs.val.end[n]);
-            }
-            else
-            {
+            } else {
                 auto t = view(j);
                 u32 off = arena.put(t.data(), (u32)t.size());
                 defs.val.push(in.kind[j], off, off + (u32)t.size());
@@ -144,10 +120,8 @@ struct Preproc
         i = skipEndl(e);
     }
 
-    void doRestore(u32 b, u32 e)
-    {
-        for (u32 j = b; j < e; ++j)
-        {
+    void doRestore(u32 b, u32 e) {
+        for (u32 j = b; j < e; ++j) {
             if (in.kind[j] == TokKind::Punct && view(j) == ",") continue;
             std::string name = fold(view(j));
             auto it = defs.byName.find(name);
@@ -159,45 +133,38 @@ struct Preproc
         i = skipEndl(e);
     }
 
-    void captureMacro(u32 b)
-    {
+    void captureMacro(u32 b) {
         std::string name = fold(view(b + 1));
         u32 j = b + 2;
         u32 pb = macros.params.size;
 
-        for (;; ++j)
-        {
+        for (;; ++j) {
             auto ckind = in.kind[j];
             auto cview = view(j);
-            if (j >= in.size || ckind == TokKind::Eof)
-            {
+            if (j >= in.size || ckind == TokKind::Eof) {
                 i = j;
                 return;
             }
             if (ckind == TokKind::Endl) continue;
-            if (ckind == TokKind::Punct)
-            {
+            if (ckind == TokKind::Punct) {
                 if (cview == "{") break;
                 if (cview == ",") continue;
             }
             ParamMode cmode = ParamMode::Plain;
-            if (!cview.empty() && cview.back() == '*')
-            {
+            if (!cview.empty() && cview.back() == '*') {
                 cmode = ParamMode::Greedy;
                 cview.remove_suffix(1);
             }
             std::string folded = fold(cview);
             u32 nOff{arena.put(folded.data(), (u32)folded.size())};
             u32 dBeg{U32_MAX}, dEnd{U32_MAX};
-            if (j + 1 < in.size && in.kind[j + 1] == TokKind::Punct && view(j + 1) == ":")
-            {
+            if (j + 1 < in.size && in.kind[j + 1] == TokKind::Punct && view(j + 1) == ":") {
                 j += 2;
                 dBeg = macros.body.size;
                 ckind = in.kind[j];
                 cview = view(j);
                 while (j < in.size && ckind != TokKind::Eof && ckind != TokKind::Endl &&
-                       !(ckind == TokKind::Punct && (cview == "," || cview == "{")))
-                {
+                       !(ckind == TokKind::Punct && (cview == "," || cview == "{"))) {
                     cview = view(j);
                     ckind = in.kind[j];
                     u32 off{arena.put(cview.data(), (u32)cview.size())};
@@ -213,16 +180,13 @@ struct Preproc
         u32 bb = macros.body.size;
         int braceDepth = 1;
         ++j;
-        for (;; ++j)
-        {
+        for (;; ++j) {
             auto ckind = in.kind[j];
             auto cview = view(j);
             if (j >= in.size || ckind == TokKind::Eof) break;
-            if (ckind == TokKind::Punct)
-            {
+            if (ckind == TokKind::Punct) {
                 if (cview == "{") ++braceDepth;
-                else if (cview == "}" && --braceDepth == 0)
-                {
+                else if (cview == "}" && --braceDepth == 0) {
                     ++j;
                     break;
                 }
@@ -235,10 +199,8 @@ struct Preproc
         i = skipEndl(j);
     }
 
-    void expandMacro(u32 id, u32 b, u32 e)
-    {
-        if (depth + 1 > kMaxExpand)
-        { // TODO: recursion error handling
+    void expandMacro(u32 id, u32 b, u32 e) {
+        if (depth + 1 > kMaxExpand) { // TODO: recursion error handling
             i = e;
             return;
         }
@@ -248,16 +210,12 @@ struct Preproc
 
         std::vector<std::pair<u32, u32>> arg(nParams, {U32_MAX, U32_MAX});
         u32 j{b + 1}, p{};
-        while (j < e && p < nParams)
-        {
+        while (j < e && p < nParams) {
             bool greedy{macros.params.mode[pb + p] == ParamMode::Greedy};
             u32 ab{j};
-            if (greedy)
-            {
+            if (greedy) {
                 j = e;
-            }
-            else
-            {
+            } else {
                 while (j < e && !(in.kind[j] == TokKind::Punct && view(j) == ","))
                     ++j;
             }
@@ -267,35 +225,27 @@ struct Preproc
         }
 
         ++depth;
-        for (u32 n{bb}; n < be; ++n)
-        {
-            if (macros.body.kind[n] == TokKind::Symbol)
-            {
+        for (u32 n{bb}; n < be; ++n) {
+            if (macros.body.kind[n] == TokKind::Symbol) {
                 std::string_view t(arena.data() + macros.body.start[n], macros.body.end[n] - macros.body.start[n]);
                 std::string folded = fold(t);
                 u32 matched{U32_MAX};
-                for (u32 q{}; q < nParams; ++q)
-                {
+                for (u32 q{}; q < nParams; ++q) {
                     std::string_view pn(arena.data() + macros.params.nameOff[pb + q], macros.params.nameLen[pb + q]);
-                    if (folded == pn)
-                    {
+                    if (folded == pn) {
                         matched = q;
                         break;
                     }
                 }
-                if (matched != U32_MAX)
-                {
-                    if (arg[matched].first != U32_MAX)
-                    {
+                if (matched != U32_MAX) {
+                    if (arg[matched].first != U32_MAX) {
                         for (u32 k{arg[matched].first}; k < arg[matched].second; ++k)
                             emitExpanded(k);
-                    }
-                    else
-                    {
+                    } else {
                         u32 dBeg{macros.params.defltBeg[pb + matched]}, dEnd{macros.params.defltEnd[pb + matched]};
-                        for (u32 n{dBeg}; n != U32_MAX && n < dEnd; ++n)
-                        {
-                            emitStored(macros.body.kind[n], macros.body.start[n], macros.body.end[n] - macros.body.start[n]);
+                        for (u32 n{dBeg}; n != U32_MAX && n < dEnd; ++n) {
+                            emitStored(macros.body.kind[n], macros.body.start[n],
+                                       macros.body.end[n] - macros.body.start[n]);
                         }
                     }
                     continue;
@@ -307,49 +257,40 @@ struct Preproc
         i = skipEndl(e);
     }
 
-    bool dispatchDirective(u32 b, u32 e)
-    {
-        if (in.kind[b] == TokKind::Symbol && ieq(view(b), "macro"))
-        {
+    bool dispatchDirective(u32 b, u32 e) {
+        if (in.kind[b] == TokKind::Symbol && ieq(view(b), "macro")) {
             captureMacro(b);
             return true;
         }
-        if (in.kind[b] == TokKind::Symbol && ieq(view(b), "restore"))
-        {
+        if (in.kind[b] == TokKind::Symbol && ieq(view(b), "restore")) {
             doRestore(b + 1, e);
             return true;
         }
         if (b + 1 < e && in.kind[b] == TokKind::Symbol &&
-            ((in.kind[b + 1] == TokKind::Symbol && ieq(view(b + 1), "equ")) || (in.kind[b + 1] == TokKind::Punct && view(b + 1) == "=")))
-        {
+            ((in.kind[b + 1] == TokKind::Symbol && ieq(view(b + 1), "equ")) ||
+             (in.kind[b + 1] == TokKind::Punct && view(b + 1) == "="))) {
             defineEqu(fold(view(b)), b + 2, e);
             return true;
         }
         return false;
     }
 
-    void run()
-    {
-        while (i < in.size)
-        {
+    void run() {
+        while (i < in.size) {
             TokKind k = in.kind[i];
-            if (k == TokKind::Eof)
-            {
+            if (k == TokKind::Eof) {
                 emitRaw(i);
                 break;
             }
-            if (k == TokKind::Endl)
-            {
+            if (k == TokKind::Endl) {
                 emitRaw(i);
                 ++i;
                 continue;
             }
             u32 b = i, e = lineEnd(i);
             if (dispatchDirective(b, e)) continue;
-            for (u32 j = b; j < e; ++j)
-            {
-                if (in.kind[j] == TokKind::Symbol && view(j) == "\\" && j + 1 < e && in.kind[j + 1] == TokKind::Endl)
-                {
+            for (u32 j = b; j < e; ++j) {
+                if (in.kind[j] == TokKind::Symbol && view(j) == "\\" && j + 1 < e && in.kind[j + 1] == TokKind::Endl) {
                     j++;
                     continue;
                 }

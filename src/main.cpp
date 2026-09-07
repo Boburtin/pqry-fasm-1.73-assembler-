@@ -1,6 +1,7 @@
+#include "STLAlias.inc"
+
 #include <cstdio>
 
-#include "IntegralAliases.h"
 #include "Preproc.h"
 #include "Prim.h"
 #include "Source.h"
@@ -21,10 +22,8 @@ const char *Endl = "\033[1;33mEndl\033[0m";
 const char *String = "\033[3;30mString\033[0m";
 const char *Symbol = "\033[3;34mSymbol\033[0m";
 
-int main(int argc, char **argv)
-{
-    if (argc < 2)
-    {
+int main(int argc, char **argv) {
+    if (argc < 2) {
         fprintf(stderr, "\n\033[1;36m%s usage:\033[35m pqry <file>\033[0m\n", chFailure);
         return EXIT_USAGE;
     }
@@ -37,10 +36,8 @@ int main(int argc, char **argv)
     preproc.run();
 
     auto tknPrint = [](const TokArray &t) {
-        for (uSize i{}; i < t.size; ++i)
-        {
-            switch (t.kind[i])
-            {
+        for (usize i{}; i < t.size; ++i) {
+            switch (t.kind[i]) {
             case TokKind::Symbol:
                 printf(BOLD, i, Symbol);
                 break;

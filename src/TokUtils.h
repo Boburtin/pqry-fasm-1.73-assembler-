@@ -4,45 +4,27 @@
 #include "Prim.h"
 #include "Source.h"
 
-class TMaker
-{
+class TMaker {
   public:
-    static bool isEOF(char c)
-    {
-        return c == '\0' || c == 0x1A;
+    static bool isEOF(char c) { return c == '\0' || c == 0x1A; }
+    static bool isSpace(char c) { return c == ' ' || c == '\t'; }
+    static bool isEOL(char c) { return c == '\r' || c == '\n'; }
+    static bool isSymbol(char c) {
+        return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == '_' ||
+               c == '.' || c == '$' || c == '!' || c == '%' || c == '@' || c == '?';
     }
-    static bool isSpace(char c)
-    {
-        return c == ' ' || c == '\t';
-    }
-    static bool isEOL(char c)
-    {
-        return c == '\r' || c == '\n';
-    }
-    static bool isSymbol(char c)
-    {
-        return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == '_' || c == '.' || c == '$' ||
-               c == '!' || c == '%' || c == '@' || c == '?';
-    }
-    static bool isPunct(char c)
-    {
-        return c == '+' || c == '-' || c == '/' || c == '*' || c == '=' || c == '<' || c == '>' || c == '(' || c == ')' || c == '[' ||
-               c == ']' || c == '{' || c == '}' || c == ':' || c == ',' || c == '|' || c == '&' || c == '~' || c == '#' || c == '`';
+    static bool isPunct(char c) {
+        return c == '+' || c == '-' || c == '/' || c == '*' || c == '=' || c == '<' || c == '>' || c == '(' ||
+               c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ':' || c == ',' || c == '|' ||
+               c == '&' || c == '~' || c == '#' || c == '`';
     }
 
-    TMaker(const Source &src) : src_(src)
-    {
-    }
+    TMaker(const Source &src) : src_(src) {}
 
-    char get() const
-    {
-        return src_.at(idx_);
-    }
+    char get() const { return src_.at(idx_); }
 
-    void scan(TokArray &out)
-    {
-        for (;;)
-        {
+    void scan(TokArray &out) {
+        for (;;) {
             auto [k, s, e] = next();
             out.push(k, s, e);
             if (k == TokKind::Eof) break;
@@ -50,14 +32,12 @@ class TMaker
     }
 
   private:
-    struct Tok
-    {
+    struct Tok {
         TokKind kind;
         u32 start, end;
     };
 
-    Tok next()
-    {
+    Tok next() {
         /* skip tabs & spaces */
         while (isSpace(get()))
             idx_++;
@@ -66,8 +46,7 @@ class TMaker
         char c{get()};
         u32 start{idx_};
 
-        switch (c)
-        {
+        switch (c) {
         case 0x1A: // do not advance idx_
         case 0x00:
             return {TokKind::Eof, idx_, idx_};
@@ -75,8 +54,7 @@ class TMaker
         case 0x22: {
             idx_++; // point to first char
             char d{get()};
-            while (!isEOF(d) && c != d)
-            {
+            while (!isEOF(d) && c != d) {
                 idx_++;
                 d = get(); // adv and fetch until d = <', ", EOF>
             }
@@ -89,8 +67,7 @@ class TMaker
         }
         default:
             if (isPunct(c)) return {TokKind::Punct, start, ++idx_};
-            while (!isEOF(c) && !isSpace(c) && !isEOL(c) && !isPunct(c))
-            {
+            while (!isEOF(c) && !isSpace(c) && !isEOL(c) && !isPunct(c)) {
                 idx_++;
                 c = get();
             }
