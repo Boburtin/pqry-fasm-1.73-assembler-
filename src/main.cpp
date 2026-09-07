@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     auto tknPrint = [](const TokArray &t) {
         for (uSize i{}; i < t.size; ++i)
         {
-            switch (t.kinds[i])
+            switch (t.kind[i])
             {
             case TokKind::Symbol:
                 printf(BOLD, i, Symbol);

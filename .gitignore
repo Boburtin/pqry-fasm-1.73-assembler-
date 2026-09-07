@@ -1,6 +1,17 @@
-.cache/
+# overkill list related to build/bin/out/debug
+
 build/
+debug/
+objs/
+bin/
+out/
+
+# LSP/clangd/clang-tidy
+
+*cache/
+*compile_commands.json
 .clang-format
-test/
-dbg/
-compile_commands.json
+
+# test argv input files
+
+*.asm

@@ -3,12 +3,13 @@
 
 #include "IntegralAliases.h"
 
-#include <cstring>
 #include <string>
 
 constexpr u32 U32_MAX = 0xFFFFFFFFU;
 constexpr u32 kMaxExpand = 1U << 12;
 constexpr uSize kCacheLine = 64ULL;
+
+#define CUR(x) x[size]
 
 #if defined(_WIN32)
 #include <malloc.h>
@@ -17,6 +18,7 @@ constexpr uSize kCacheLine = 64ULL;
 #define ALIGNED_FREE(p) _aligned_free(p)
 #else
 #include <cstdlib>
+#include <cstring>
 #define ALIGNED_ALLOC(align, size) std::aligned_alloc((align), (size))
 #define ALIGNED_FREE(p) std::free(p)
 #endif
@@ -79,8 +81,8 @@ enum class ParamMode : u8 { Plain, Greedy, Group };
 struct TokArray
 {
     u32 size{}, cap{};
-    TokKind *kinds{};
-    u32 *starts{}, *ends{};
+    TokKind *kind{};
+    u32 *start{}, *end{};
 
     TokArray() = default;
     explicit TokArray(u32 n)
@@ -92,25 +94,25 @@ struct TokArray
 
     ~TokArray()
     {
-        ALIGNED_FREE(kinds);
-        ALIGNED_FREE(starts);
-        ALIGNED_FREE(ends);
+        ALIGNED_FREE(kind);
+        ALIGNED_FREE(start);
+        ALIGNED_FREE(end);
     }
 
     void reserve(u32 n)
     {
-        kinds = alloc_array<TokKind>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(TokKind))), n);
-        starts = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
-        ends = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        kind = alloc_array<TokKind>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(TokKind))), n);
+        start = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
+        end = alloc_array<u32>(ALIGNED_ALLOC(kCacheLine, aligned_size(n * sizeof(u32))), n);
         cap = n;
     }
 
     void grow()
     {
         u32 n = cap ? cap * 2 : 64;
-        kinds = alloc_array<TokKind>(aligned_grow(kinds, cap * sizeof(TokKind), aligned_size(n * sizeof(TokKind)), kCacheLine), n);
-        starts = alloc_array<u32>(aligned_grow(starts, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
-        ends = alloc_array<u32>(aligned_grow(ends, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        kind = alloc_array<TokKind>(aligned_grow(kind, cap * sizeof(TokKind), aligned_size(n * sizeof(TokKind)), kCacheLine), n);
+        start = alloc_array<u32>(aligned_grow(start, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
+        end = alloc_array<u32>(aligned_grow(end, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
 
@@ -118,8 +120,9 @@ struct TokArray
     {
         ASSUME(size <= cap);
         if (size == cap) grow();
-        kinds[size] = k;
-        starts[size] = s, ends[size] = e;
+        CUR(kind) = k;
+        CUR(start) = s;
+        CUR(end) = e;
         return size++;
     }
 };
@@ -169,14 +172,15 @@ struct DefTable
         prev = alloc_array<u32>(aligned_grow(prev, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
-    u32 add(DefKind k, u32 vb, u32 ve, u32 prevId = U32_MAX)
+    u32 add(DefKind k, u32 vb, u32 ve, u32 pr = U32_MAX)
     {
         ASSUME(size <= cap);
         if (size == cap) grow();
-        kind[size] = k;
-        valBeg[size] = vb, valEnd[size] = ve;
-        lock[size] = 0;
-        prev[size] = prevId;
+        CUR(kind) = k;
+        CUR(valBeg) = vb;
+        CUR(valEnd) = ve;
+        CUR(lock) = 0;
+        CUR(prev) = pr;
         return size++;
     }
 };
@@ -225,13 +229,15 @@ struct ParamStore
         defltEnd = alloc_array<u32>(aligned_grow(defltEnd, cap * sizeof(u32), aligned_size(n * sizeof(u32)), kCacheLine), n);
         cap = n;
     }
-    u32 push(u32 nOff, u32 nLen, ParamMode m, u32 dBeg = U32_MAX, u32 dEnd = U32_MAX)
+    u32 push(u32 no, u32 nl, ParamMode m, u32 db = U32_MAX, u32 de = U32_MAX)
     {
         ASSUME(size <= cap);
         if (size == cap) grow();
-        nameOff[size] = nOff, nameLen[size] = nLen;
-        mode[size] = m;
-        defltBeg[size] = dBeg, defltEnd[size] = dEnd;
+        CUR(nameOff) = no;
+        CUR(nameLen) = nl;
+        CUR(mode) = m;
+        CUR(defltBeg) = db;
+        CUR(defltEnd) = de;
         return size++;
     }
 };
@@ -287,9 +293,11 @@ struct MacroTable
     {
         ASSUME(size <= cap);
         if (size == cap) grow();
-        kind[size] = k;
-        paramBeg[size] = pb, paramEnd[size] = pe;
-        bodyBeg[size] = bb, bodyEnd[size] = be;
+        CUR(kind) = k;
+        CUR(paramBeg) = pb;
+        CUR(paramEnd) = pe;
+        CUR(bodyBeg) = bb;
+        CUR(bodyEnd) = be;
         return size++;
     }
 };
@@ -328,8 +336,8 @@ struct OriginArray
     {
         ASSUME(size <= cap);
         if (size == cap) grow();
-        srcTok[size] = s;
-        depth[size] = d;
+        CUR(srcTok) = s;
+        CUR(depth) = d;
         size++;
     }
 };

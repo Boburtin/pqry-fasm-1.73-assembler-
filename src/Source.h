@@ -1,15 +1,11 @@
 #ifndef SOURCE_H
 #define SOURCE_H
 
-#include <cassert>
-#include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <string>
-#include <string_view>
 
-using uchar = unsigned char;
-using u32 = std::uint32_t;
+#include "IntegralAliases.h"
 
 class Source
 {

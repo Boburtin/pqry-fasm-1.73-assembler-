@@ -1,9 +1,6 @@
 #ifndef TOK_UTILS_H
 #define TOK_UTILS_H
 
-#include <string_view>
-#include <unordered_map>
-
 #include "Prim.h"
 #include "Source.h"
 
@@ -87,7 +84,7 @@ class TMaker
         }
         case 0x0A: // LF/CR
         case 0x0D: {
-            idx_ += (src_.at(idx_ + 1) ^ c == 0x07 ? 2 : 1);
+            idx_ += (src_.at(idx_ + 1) ^ c) == 0x07 ? 2 : 1;
             return {TokKind::Endl, start, idx_};
         }
         default:
